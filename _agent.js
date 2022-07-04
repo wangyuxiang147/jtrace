@@ -770,6 +770,70 @@ function hook_jni(func_name) {
     }
     return listener;
 }
+
+
+function inline_hook() {
+    var libJDMobileSec_lib_addr = Module.findBaseAddress("libJDMobileSec.so");
+    if (libJDMobileSec_lib_addr) {
+        console.log("libnative_lib_addr:", libJDMobileSec_lib_addr);
+        var addr_F0A0 = libJDMobileSec_lib_addr.add(0xF0A0);
+        var addr_FB64 = libJDMobileSec_lib_addr.add(0xFB64);
+        console.log("addr_F0A0:", addr_F0A0);
+        console.log("addr_FB64:", addr_FB64);
+
+
+        var F0A0_native_func = new NativeFunction(addr_F0A0, "void", [])
+        Interceptor.replace(F0A0_native_func, new NativeCallback(function(){
+            console.log("F0A0_native_func")
+            return 
+            // return F0A0_native_func(arg1, arg2, arg3, arg4)
+        }, "void", []))
+
+        var FB64_native_func = new NativeFunction(addr_FB64, "void", [])
+        Interceptor.replace(FB64_native_func, new NativeCallback(function(){
+            console.log("FB64_native_func")
+            return 
+        }, "void", []))
+    }
+}
+
+function hook_dlopen(){
+    var dlopen_addr = Module.findExportByName(null, "dlopen") // android 6.0 低版本使用dlopen加载so
+    Interceptor.attach(dlopen_addr, {
+        onEnter: function(args){
+            console.log("dlopen_addr onEnter", ptr(args[0]).readCString())
+            var so_name = ptr(args[0]).readCString()
+            if ( so_name && so_name.indexOf('libJDMobileSec.so')> -1){
+                this.call_hook = true;
+            }
+
+        }, onLeave:function(retval){
+            
+            if(this.call_hook){
+                // inline_hook()
+                
+                
+            }
+        }
+    })
+    var android_dlopen_ext_addr = Module.findExportByName(null, "android_dlopen_ext")
+    Interceptor.attach(android_dlopen_ext_addr, {
+        onEnter: function(args){
+            console.log("android_dlopen_ext_addr onEnter", ptr(args[0]).readCString())
+            var so_name = ptr(args[0]).readCString()
+            if ( so_name.indexOf('libJDMobileSec.so')> -1){
+                this.call_hook = true;
+            }
+        }, onLeave:function(retval){
+            if(this.call_hook){
+                inline_hook()
+                console.log('-----')
+                
+                // dis(base.add(0xf7c0),37)
+            }
+        }
+    })
+}
 function hook_all_jni() {
     for (let index in jni_struct_array) {
         hook_jni(jni_struct_array[index]);
@@ -814,13 +878,21 @@ function hook_custom_jni() {
         // hook_jni("GetStaticIntField");
         // hook_jni("GetStaticLongField");
         // hook_jni("GetStaticShortField");
-        // hook_jni("GetMethodID");
-        // hook_jni("CallObjectMethod");
-        // hook_jni("GetStaticMethodID");
+        hook_jni("GetMethodID");
+        hook_jni("GetStaticMethodID")
+        hook_jni("FindClass");
+        hook_jni("NewStringUTF");
+        hook_jni("GetStaticObjectField");
+        hook_jni("AllocObject");
+        hook_jni("CallVoidMethodV");
+        hook_jni("CallObjectMethodA");
+        hook_jni("GetStaticIntField");
+        hook_jni("CallBooleanMethodA");
+
     });
 }
-hook_all_jni();
-// hook_custom_jni();
+// hook_all_jni();
+hook_custom_jni();
 
 },{"./logger":2,"./templates/unidbg":3}],2:[function(require,module,exports){
 "use strict";
